@@ -1,0 +1,15 @@
+name: TReward
+version: '${project.version}'
+main: com.tracer0219.treward.TReward
+api-version: 1.16
+depend: [ PlayerPoints, Vault ]
+authors: [ Tracer ]
+description: Reward
+commands:
+  treward:
+    permission: treward.use
+    permission-message: You have no permission use this
+    usage: §c/<command> ?
+permissions:
+  treward.use:
+    default: true
