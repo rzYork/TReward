@@ -2,15 +2,25 @@ package com.tracer0219.treward.events;
 
 import com.tracer0219.treward.entity.Reward;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.entity.Player;
 
 import java.util.List;
 
 public interface IRewardManager {
     //    已经发布的悬赏不可modify
 
+    /**
+     * 查找某个悬赏的订阅者
+     * @param task
+     * @return
+     */
     List<OfflinePlayer> findSubscribers(Integer task);
+
+    /**
+     * 创建一个悬赏
+     * @param reward
+     */
     void createReward(Reward reward);
+
     boolean isBalanceEnough(Reward reward);
     boolean isBalanceEnough(Reward reward,int times);
     boolean removeReward(Reward reward);
@@ -42,4 +52,13 @@ public interface IRewardManager {
     Integer findTask(OfflinePlayer p);
 
     void finishTask(OfflinePlayer p,int id);
+
+    /**
+     * 定时清除超时悬赏
+     * @return
+     */
+    List<Reward> removeRewardTimedOut();
+
+    void RNM退钱(Reward reward);
+
 }

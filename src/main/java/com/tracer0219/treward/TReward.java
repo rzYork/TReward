@@ -4,11 +4,15 @@ import com.tracer0219.treward.command.TRewardCommand;
 import com.tracer0219.treward.database.TRewardSQLManager;
 import com.tracer0219.treward.eco.PlayerPointsSupporter;
 import com.tracer0219.treward.eco.VaultSupporter;
+import com.tracer0219.treward.entity.Reward;
 import com.tracer0219.treward.events.PlayerListener;
 import com.tracer0219.treward.events.RewardManager;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
+
+import java.util.List;
 
 public final class TReward extends JavaPlugin {
     public static final double TAX_RATE = 0.05;
@@ -19,11 +23,14 @@ public final class TReward extends JavaPlugin {
     private static PlayerPointsSupporter ppSupporter;
     private static VaultSupporter vaultSupporter;
     private static TRewardCommand tc;
-    private RewardManager rm;
-    private  PlayerListener listener;
-    public static void updateGUI(){
+    private static RewardManager rm;
+    private static PlayerListener listener;
+
+    public static void update() {
         tc.update();
+
     }
+
     public static TReward getInstance() {
         return instance;
     }
@@ -32,16 +39,27 @@ public final class TReward extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
-        if(!instance.getDataFolder().exists()){
-            instance.getDataFolder().mkdir();}
+        if (!instance.getDataFolder().exists()) {
+            instance.getDataFolder().mkdir();
+        }
         ppSupporter = new PlayerPointsSupporter();
         vaultSupporter = new VaultSupporter(instance);
         sqlM = new TRewardSQLManager(instance);
         rm = new RewardManager(instance, sqlM, vaultSupporter, ppSupporter);
         tc = new TRewardCommand(this, rm);
         getCommand("treward").setExecutor(tc);
-        listener=new PlayerListener(rm);
-        getServer().getPluginManager().registerEvents(listener,this);
+        listener = new PlayerListener(rm);
+        getServer().getPluginManager().registerEvents(listener, this);
+
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                List<Reward> rewards = rm.removeRewardTimedOut();
+                for (Reward reward : rewards) {
+                    getLogger().info("悬赏 "+reward.toString()+"已经超时已被移除");
+                }
+            }
+        }.runTaskTimer(this,0L,20L);
     }
 
 

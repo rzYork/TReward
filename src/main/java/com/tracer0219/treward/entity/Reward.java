@@ -1,7 +1,13 @@
 package com.tracer0219.treward.entity;
 
+import org.apache.commons.lang.StringUtils;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.block.data.type.RespawnAnchor;
+
+import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class Reward {
     private OfflinePlayer creator;
@@ -10,6 +16,42 @@ public class Reward {
     private int coins, points;
 
     private int id;
+    private long invalidTimestamp;
+    private HashSet<OfflinePlayer> subscribers = new HashSet<>();
+
+
+
+
+    public Date getInvalidTime() {
+        return new Date(System.currentTimeMillis() - invalidTimestamp);
+    }
+
+    private void setInvalid() {
+        this.invalidTimestamp = System.currentTimeMillis();
+    }
+
+    public long getInvalidTimestamp() {
+        return invalidTimestamp;
+    }
+
+    public void setInvalidTimestamp(long invalidTimestamp) {
+        this.invalidTimestamp = invalidTimestamp;
+    }
+
+    public void subscribe(OfflinePlayer subscriber) {
+        this.subscribers.add(subscriber);
+    }
+
+    public boolean unsubscribe(OfflinePlayer subscriber) {
+        boolean remove = this.subscribers.remove(subscriber);
+        if (subscribers.isEmpty())
+            this.setInvalid();
+        return remove;
+    }
+
+    public HashSet<OfflinePlayer> getSubscribers() {
+        return new HashSet<>(subscribers);
+    }
 
     public OfflinePlayer getCreator() {
         return creator;
@@ -44,7 +86,9 @@ public class Reward {
         }
         this.coins = coins;
         this.points = points;
+        setInvalid();
     }
+
 
     /**
      * 只有在数据库读取已存在的悬赏时使用该构造!
@@ -55,9 +99,10 @@ public class Reward {
      * @param points
      * @param existingId
      */
-    public Reward(OfflinePlayer creator, OfflinePlayer target, int coins, int points, int existingId) {
+    public Reward(OfflinePlayer creator, OfflinePlayer target, int coins, int points, int existingId, long invalidTimestamp) {
         this(creator, target, coins, points);
         this.id = existingId;
+        this.invalidTimestamp = invalidTimestamp;
     }
 
 
@@ -72,6 +117,9 @@ public class Reward {
                 ", target=" + target.getName() +
                 ", coins=" + coins +
                 ", points=" + points +
+                ", id=" + id +
+                ", invalidTimestamp=" + invalidTimestamp +
+                ", subscribers=" + StringUtils.join(subscribers.stream().map(OfflinePlayer::getName).collect(Collectors.toList()).toArray(new String[0]), ",") +
                 '}';
     }
 }

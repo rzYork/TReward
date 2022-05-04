@@ -37,7 +37,9 @@ public class TRewardSQLManager extends SQLHandler {
                 .addField("target", DataType.TEXT)
                 .addField("publisher", DataType.TEXT)
                 .addField("points", DataType.INTEGER)
-                .addField("coins", DataType.INTEGER);
+                .addField("coins", DataType.INTEGER)
+                .addField("subscribers",DataType.TEXT)
+                .addField("timestamp",DataType.TEXT);
         return sqlTable.create();
     }
 

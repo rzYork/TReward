@@ -202,6 +202,7 @@ public class TRewardCommand implements CommandExecutor {
                         msg(sender, "&4&L删除数据不存在！请联系管理员");
                         return true;
                     }
+                    manager.RNM退钱(reward);
                     msg(sender, "&4&l已成功撤销悬赏!");
                     return true;
                 } else if (args[0].equalsIgnoreCase("accept")) {

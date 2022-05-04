@@ -8,13 +8,13 @@ import com.tracer0219.treward.entity.Reward;
 import mc.obliviate.bloksqliteapi.sqlutils.SQLTable;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.entity.Player;
 
+import javax.management.relation.RoleUnresolved;
+import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class RewardManager implements IRewardManager {
     private TReward instance;
@@ -37,17 +37,21 @@ public class RewardManager implements IRewardManager {
     public List<OfflinePlayer> findSubscribers(Integer task) {
         List<OfflinePlayer> list = new ArrayList<>();
         if (task == null) return list;
-        ResultSet rs = taskTable.select("task", String.valueOf(task));
+        ResultSet r = rewardTable.select(String.valueOf(task));
         try {
-            while (rs.next()) {
-                list.add(Bukkit.getOfflinePlayer(UUID.fromString(rs.getString("player"))));
+            if (!r.next()) {
+                new RuntimeException("invalid task id!").printStackTrace();
+                return null;
             }
+            String subscribersStr = r.getString("subscribers");
+            list = parseSubscribersString(subscribersStr);
         } catch (Exception e) {
             e.printStackTrace();
         }
 
         return list;
     }
+
 
     @Override
     public void createReward(Reward reward) {
@@ -64,9 +68,12 @@ public class RewardManager implements IRewardManager {
                 .putData("publisher", reward.getCreator().getUniqueId().toString())
                 .putData("points", reward.getPoints())
                 .putData("coins", reward.getCoins())
+                .putData("subscribers", "[]")
+                .putData("timestamp", String.valueOf(reward.getInvalidTimestamp()))
+
         );
 
-        TReward.updateGUI();
+        TReward.update();
 
 
     }
@@ -104,7 +111,7 @@ public class RewardManager implements IRewardManager {
             return false;
         }
         rewardTable.delete(id);
-        TReward.updateGUI();
+        TReward.update();
         return true;
     }
 
@@ -116,15 +123,21 @@ public class RewardManager implements IRewardManager {
             if (!r.next()) {
                 return null;
             }
-
-            return new Reward(
+            Reward reward = new Reward(
                     Bukkit.getOfflinePlayer(UUID.fromString(r.getString("publisher"))),
                     Bukkit.getOfflinePlayer(UUID.fromString(r.getString("target"))),
                     r.getInt("coins"),
                     r.getInt("points"),
-                    r.getInt("id")
+                    r.getInt("id"),
+                    Long.valueOf(r.getString("timestamp"))
 
             );
+
+            parseSubscribersString(r.getString("subscribers")).stream().forEach(s -> {
+                reward.subscribe(s);
+            });
+
+            return reward;
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -141,8 +154,15 @@ public class RewardManager implements IRewardManager {
                         Bukkit.getOfflinePlayer(UUID.fromString(r.getString("target"))),
                         r.getInt("coins"),
                         r.getInt("points"),
-                        r.getInt("id")
+                        r.getInt("id"),
+                        Long.valueOf(r.getString("timestamp"))
+
                 );
+                parseSubscribersString(r.getString("subscribers")).stream().forEach(s -> {
+                    reward.subscribe(s);
+                });
+                String timestamp = r.getString("timestamp");
+                Long.valueOf(timestamp);
                 list.add(reward);
                 if (reward.getTarget() == null) {
                     Bukkit.getLogger().info("target is not null");
@@ -206,16 +226,25 @@ public class RewardManager implements IRewardManager {
         if (challenger == reward.getTarget()) {
             return false;
         }
+        reward.subscribe(challenger);
+        List<String> subscriberUUIDList = new ArrayList<>();
+        reward.getSubscribers().stream().forEach(s -> {
+            subscriberUUIDList.add(s.getUniqueId().toString());
+        });
+        rewardTable.update(rewardTable.createUpdate(id)
+                .putData("timestamp", String.valueOf(reward.getInvalidTimestamp()))
+                .putData("subscribers", strArrayToStr(subscriberUUIDList.toArray(new String[0]))));
+
         taskTable.insert(taskTable.createUpdate(challenger.getUniqueId().toString()).putData("player", challenger.getUniqueId().toString()).putData("task", id));
-        TReward.updateGUI();
+        TReward.update();
         return true;
     }
 
     @Override
     public void doneTask(OfflinePlayer p, Reward reward) {
         doneTask(p, reward.getId());
-
     }
+
 
     @Override
     public void doneTask(OfflinePlayer p, int id) {
@@ -257,7 +286,81 @@ public class RewardManager implements IRewardManager {
     public void finishTask(OfflinePlayer p, int id) {
         if (taskTable.exist(p.getUniqueId().toString()))
             taskTable.delete(p.getUniqueId().toString());
-        TReward.updateGUI();
+
+        //移除订阅者
+        Reward reward = findReward(id);
+        if (!reward.unsubscribe(p)) {
+            Bukkit.getLogger().info("SUBSCRIBER DOES NOT EXIST");
+        }
+        List<String> subscriberUUIDList = new ArrayList<>();
+        reward.getSubscribers().stream().forEach(s -> {
+            subscriberUUIDList.add(s.getUniqueId().toString());
+        });
+        rewardTable.update(rewardTable.createUpdate(id)
+                .putData("subscribers", strArrayToStr(subscriberUUIDList.toArray(new String[0])))
+                .putData("timestamp", String.valueOf(reward.getInvalidTimestamp()))
+        );
+
+        TReward.update();
+    }
+
+
+
+
+    @Override
+    public List<Reward> removeRewardTimedOut() {
+        List<Reward> result = findAll().stream().filter(r -> r.getSubscribers().isEmpty() && r.getInvalidTime().getTime() > 1000 * 7).collect(Collectors.toList());
+        result.stream().forEach(r -> {
+            removeReward(r);
+            RNM退钱(r);
+            Bukkit.getLogger().info(r.getId() + " " + r.getSubscribers().toString() + " " + r.getInvalidTime().getTime() + " filter: " + (r.getSubscribers().isEmpty() && r.getInvalidTime().getTime() > 1000 * 7));
+        });
+        return result;
+    }
+
+    @Override
+    public void RNM退钱(Reward reward) {
+        vaultSupporter.deposit(reward.getCreator(),reward.getCoins());
+        ppSupporter.deposit(reward.getCreator(),reward.getPoints());
+    }
+
+
+    private static List<OfflinePlayer> parseSubscribersString(String str) {
+        List<OfflinePlayer> ss = new ArrayList<>();
+        if (str.length() < 3) {
+            return ss;
+        }
+        str = str.substring(1, str.length() - 1);
+        String[] subscribers = str.split(",");
+        for (int i = 0; i < subscribers.length; i++) {
+            subscribers[i] = subscribers[i].replaceAll(" ", "");
+            if (subscribers[i].isEmpty())
+                continue;
+            try {
+                OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(UUID.fromString(subscribers[i]));
+                ss.add(offlinePlayer);
+            } catch (Exception e) {
+                continue;
+            }
+        }
+
+        return ss;
+
+    }
+
+    public static String strArrayToStr(String[] arr) {
+        StringBuffer str = new StringBuffer();
+        str.append("[");
+        for (int i = 0; i < arr.length; i++) {
+            if (i == arr.length - 1) {
+                str.append(arr[i]);
+            } else {
+                str.append(arr[i]);
+                str.append(",");
+            }
+        }
+        str.append("]");
+        return str.toString();
     }
 
 
